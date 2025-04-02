@@ -1,0 +1,56 @@
+---
+name: "Plan and apply terraform for a directory"
+description: "Plan and apply terraform inside a directory"
+inputs:
+  working_dir_path:
+    description: "Directory where all the Terragrunt files are located"
+    required: true
+  terraform_version:
+    description: "Terraform version"
+    required: true
+  terragrunt_version:
+    description: "Terragrunt version"
+    required: true
+  gcp_credentials_json:
+    description: "GCP service account credentials JSON file"
+    required: true
+  github_token:
+    description: "GitHub token"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup authentication with Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ inputs.gcp_credentials_json }}
+
+    - name: Terragrunt plan
+      if: github.event_name == 'pull_request'
+      uses: gruntwork-io/terragrunt-action@v2
+      # configure git to use custom token to clone repository.
+      env:
+        INPUT_PRE_EXEC_1: |
+          git config --global url."https://user:${{ inputs.github_token }}@github.com".insteadOf "https://github.com"
+      with:
+        tf_version: ${{ inputs.terraform_version }}
+        tg_version: ${{ inputs.terragrunt_version }}
+        tg_dir: ${{ inputs.working_dir_path }}
+        tg_command: plan
+
+    - name: Terragrunt apply plan
+      uses: gruntwork-io/terragrunt-action@v2
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      # configure git to use custom token to clone repository.
+      env:
+        INPUT_PRE_EXEC_1: |
+          git config --global url."https://user:${{ inputs.github_token }}@github.com".insteadOf "https://github.com"
+      with:
+        tf_version: ${{ inputs.terraform_version }}
+        tg_version: ${{ inputs.terragrunt_version }}
+        tg_dir: ${{ inputs.working_dir_path }}
+        tg_command: apply
